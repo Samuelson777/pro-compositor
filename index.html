@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Pro Compositor Enterprise Environment - Advanced 3D Node Compositing Simulator">
+    <title>Pro Compositor | Enterprise Edition</title>
+    <style>
+        /* =========================================
+           1. DESIGN SYSTEM & TOKENS
+           ========================================= */
+        :root {
+            /* Dark Theme (Default) */
+            --bg-base: #09090b;
+            --bg-panel: rgba(24, 24, 27, 0.75);
+            --bg-card: rgba(39, 39, 42, 0.5);
+            --text-100: #ffffff;
+            --text-200: #a1a1aa;
+            --text-300: #71717a;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.4);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --border-dim: rgba(255, 255, 255, 0.1);
+            
+            /* Performance & Easing */
+            --easing-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
+            --easing-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        [data-theme="light"] {
+            /* Light Theme */
+            --bg-base: #f4f4f5;
+            --bg-panel: rgba(255, 255, 255, 0.85);
+            --bg-card: rgba(255, 255, 255, 0.7);
+            --text-100: #09090b;
+            --text-200: #52525b;
+            --text-300: #a1a1aa;
+            --border-dim: rgba(0, 0, 0, 0.1);
+            --accent-glow: rgba(59, 130, 246, 0.2);
+        }
+
+        /* =========================================
+           2. FOUNDATIONS & ACCESSIBILITY
+           ========================================= */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-100);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            transition: background-color 0.4s var(--easing-smooth), color 0.4s var(--easing-smooth);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* A11y Focus Rings */
+        :focus:not(:focus-visible) { outline: none; }
+        :focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--bg-card); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-300); }
+
+        h1, h2, h3 { font-weight: 600; letter-spacing: -0.02em; }
+        p { line-height: 1.6; margin-bottom: 1.25rem; font-size: 1.05rem; color: var(--text-200); }
+
+        /* =========================================
+           3. LAYOUT ARCHITECTURE
+           ========================================= */
+        #app-shell {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at 50% -20%, rgba(59, 130, 246, 0.08), transparent 60%);
+        }
+
+        /* SIDEBAR */
+        #sidebar {
+            width: 320px;
+            background: var(--bg-panel);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border-dim);
+            display: flex;
+            flex-direction: column;
+            z-index: 50;
+        }
+
+        .brand-header { padding: 32px 24px; border-bottom: 1px solid var(--border-dim); }
+        .brand-header h1 { font-size: 1.2rem; color: var(--text-100); }
+        .brand-header p { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.15em; margin-top: 8px; font-weight: 500; color: var(--text-300); }
+
+        .nav-list { flex-grow: 1; overflow-y: auto; list-style: none; padding: 16px 12px; }
+        
+        .nav-item {
+            padding: 12px 16px; margin-bottom: 4px; border-radius: 8px;
+            display: flex; align-items: center; cursor: pointer;
+            transition: all 0.2s var(--easing-snappy); color: var(--text-200);
+            background: transparent; border: none; width: 100%; text-align: left; font-size: 0.95rem; font-family: inherit;
+        }
+
+        .nav-item:hover { background: var(--bg-card); color: var(--text-100); }
+        .nav-item.active { background: rgba(59, 130, 246, 0.1); color: var(--accent); font-weight: 500; }
+        
+        .nav-indicator {
+            width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--text-300);
+            margin-right: 16px; transition: all 0.3s ease; flex-shrink: 0;
+        }
+        .nav-item.active .nav-indicator { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
+        .nav-item.completed .nav-indicator { border-color: var(--success); background: var(--success); }
+
+        /* WORKSPACE & TOOLBAR */
+        #workspace { flex-grow: 1; display: flex; flex-direction: column; position: relative; min-width: 0; }
+
+        #toolbar {
+            height: 64px; padding: 0 40px; display: flex; align-items: center; justify-content: space-between;
+            background: var(--bg-panel); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border-dim); z-index: 40;
+        }
+
+        .progress-ui { display: flex; align-items: center; gap: 16px; width: 100%; max-width: 400px; }
+        .progress-track { height: 4px; width: 100%; background: var(--border-dim); border-radius: 2px; overflow: hidden; }
+        #progress-bar { height: 100%; width: 0%; background: var(--accent); transition: width 0.6s var(--easing-snappy); }
+        .progress-text { font-size: 0.75rem; font-weight: 600; color: var(--text-200); text-transform: uppercase; letter-spacing: 0.05em; }
+
+        .btn-icon {
+            background: transparent; border: 1px solid var(--border-dim); color: var(--text-100);
+            width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: grid; place-items: center;
+            transition: all 0.2s ease;
+        }
+        .btn-icon:hover { background: var(--bg-card); border-color: var(--text-300); }
+
+        /* VIEWPORT */
+        #content-viewport { flex-grow: 1; overflow-y: auto; padding: 60px 80px; position: relative; scroll-behavior: smooth; }
+
+        .module { display: none; opacity: 0; max-width: 900px; margin: 0 auto; will-change: opacity, transform; }
+        .module.active { display: block; animation: fadeUp 0.6s var(--easing-snappy) forwards; }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .module h2 { font-size: 2.2rem; margin-bottom: 1rem; color: var(--text-100); }
+        .module h3 { font-size: 1.1rem; color: var(--accent); margin: 2rem 0 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        .glass-card {
+            background: var(--bg-card); border: 1px solid var(--border-dim);
+            border-radius: 12px; padding: 32px; margin: 2rem 0;
+            position: relative; overflow: hidden; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.2);
+        }
+        .glass-card ul { margin-left: 20px; color: var(--text-200); }
+        .glass-card li { margin-bottom: 10px; }
+        .glass-card li strong { color: var(--text-100); }
+
+        /* =========================================
+           4. HARDWARE-ACCELERATED 3D ENGINE
+           ========================================= */
+        .engine-container {
+            width: 100%; height: 500px; background: #000; border-radius: 12px;
+            border: 1px solid #27272a; position: relative; overflow: hidden;
+            display: flex; flex-direction: column; margin: 2rem 0;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); perspective: 1200px;
+            
+            /* Custom properties for dynamic specular lighting */
+            --mouse-x: 50%;
+            --mouse-y: 50%;
+        }
+
+        .scene-3d {
+            width: 100%; height: calc(100% - 70px); position: relative;
+            transform-style: preserve-3d; 
+            /* Let JS handle transform for extreme smoothness via rAF */
+            will-change: transform; 
+        }
+
+        .engine-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0.03; transition: opacity 0.6s var(--easing-snappy);
+            pointer-events: none; display: flex; align-items: center; justify-content: center;
+        }
+        .engine-layer.active { opacity: 1; }
+
+        /* Dynamic nodes */
+        #node-env { background: linear-gradient(to top, #1e3a8a, #020617); transform: translateZ(-200px); }
+        .grid-floor {
+            position: absolute; bottom: -20%; width: 150%; height: 80%;
+            background-image: linear-gradient(rgba(59, 130, 246, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(59, 130, 246, 0.3) 1px, transparent 1px);
+            background-size: 50px 50px; transform: rotateX(75deg);
+        }
+
+        #node-shadow { transform: translateZ(-50px); mix-blend-mode: multiply; }
+        .shadow-blob { width: 200px; height: 40px; background: rgba(0,0,0,0.95); border-radius: 50%; filter: blur(12px); transform: translateY(120px) translateX(20px); }
+
+        #node-subject { transform: translateZ(20px); }
+        .subject-cube {
+            width: 130px; height: 260px; border-radius: 8px; position: relative; overflow: hidden;
+            background: linear-gradient(135deg, #a1a1aa, #3f3f46);
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.5);
+        }
+        /* Specular Glass reflection tracking mouse via CSS variables */
+        .subject-cube::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(255,255,255,0.2) 0%, transparent 60%);
+            mix-blend-mode: overlay; pointer-events: none;
+        }
+
+        #node-light { transform: translateZ(60px); mix-blend-mode: screen; }
+        .rim-light-sim { width: 130px; height: 260px; border-radius: 8px; box-shadow: inset 20px 0 30px rgba(59, 130, 246, 0.9); }
+
+        #node-atmos { transform: translateZ(120px); mix-blend-mode: screen; }
+        .fog-sim { width: 150%; height: 150%; background: radial-gradient(circle at 30% 70%, rgba(59, 130, 246, 0.2), transparent 50%); filter: blur(25px); }
+
+        /* Control Deck */
+        .engine-controls {
+            height: 70px; background: #09090b; border-top: 1px solid #27272a;
+            display: flex; align-items: center; padding: 0 20px; gap: 10px; z-index: 10;
+        }
+
+        .node-btn {
+            background: transparent; border: 1px solid #3f3f46; color: #a1a1aa;
+            padding: 8px 16px; border-radius: 6px; font-size: 0.8rem; font-weight: 500;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .node-btn:hover { border-color: #71717a; color: #fff; }
+        .node-btn.active { background: rgba(59, 130, 246, 0.15); border-color: var(--accent); color: var(--accent); }
+        
+        .btn-reset { margin-left: auto; border-color: rgba(245, 158, 11, 0.3); color: var(--warning); }
+        .btn-reset:hover { background: rgba(245, 158, 11, 0.15); border-color: var(--warning); }
+
+        /* =========================================
+           5. NOTIFICATION TOAST SYSTEM
+           ========================================= */
+        #toast-container { position: fixed; bottom: 90px; right: 40px; display: flex; flex-direction: column; gap: 12px; z-index: 9999; pointer-events: none; }
+        
+        .toast {
+            background: var(--bg-panel); backdrop-filter: blur(12px); border: 1px solid var(--border-dim);
+            border-radius: 8px; padding: 12px 24px; font-size: 0.85rem; font-weight: 500; color: var(--text-100);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3); transform: translateX(120%); opacity: 0;
+            animation: slideIn 0.4s var(--easing-snappy) forwards;
+        }
+        @keyframes slideIn { to { transform: translateX(0); opacity: 1; } }
+
+        /* =========================================
+           6. FOOTER COMMAND PALETTE
+           ========================================= */
+        #footer {
+            padding: 16px 40px; background: var(--bg-panel); backdrop-filter: blur(20px);
+            border-top: 1px solid var(--border-dim); display: flex; justify-content: space-between; align-items: center; z-index: 40;
+        }
+
+        .cmd-btn {
+            background: var(--bg-card); border: 1px solid var(--border-dim); color: var(--text-100);
+            padding: 10px 24px; border-radius: 8px; font-weight: 500; cursor: pointer;
+            transition: all 0.2s var(--easing-snappy); font-family: inherit;
+        }
+        .cmd-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
+        .cmd-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        
+        .cmd-primary { background: var(--text-100); color: var(--bg-base); border: none; }
+        .cmd-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(255,255,255,0.15); background: var(--text-200); }
+        [data-theme="light"] .cmd-primary { background: var(--accent); color: #fff; }
+        
+        .keyboard-shortcuts { display: flex; gap: 12px; font-size: 0.75rem; color: var(--text-300); align-items: center; }
+        .key { background: var(--bg-card); border: 1px solid var(--border-dim); padding: 4px 8px; border-radius: 4px; font-family: monospace; color: var(--text-200); }
+
+        @media (max-width: 900px) {
+            #sidebar { display: none; } /* Simplified for structural demo */
+            #toolbar, #footer { padding: 16px 20px; }
+            #content-viewport { padding: 30px 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app-shell">
+        
+        <!-- Sidebar Navigation -->
+        <aside id="sidebar" aria-label="Main Navigation">
+            <div class="brand-header">
+                <h1>Pro Compositor</h1>
+                <p>Enterprise Architecture</p>
+            </div>
+            <nav>
+                <ul class="nav-list" id="nav-list">
+                    <!-- Populated via JavaScript -->
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main id="workspace">
+            
+            <!-- Toolbar -->
+            <header id="toolbar">
+                <div class="progress-ui" aria-label="Module Progress">
+                    <span class="progress-text">Progress</span>
+                    <div class="progress-track"><div id="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div></div>
+                </div>
+                <button class="btn-icon" id="btn-theme" title="Toggle Theme" aria-label="Toggle Dark/Light Mode">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                </button>
+            </header>
+
+            <!-- Scrollable Content Viewport -->
+            <div id="content-viewport" tabindex="-1">
+                
+                <section class="module" id="module-0">
+                    <h2>Structural Architecture</h2>
+                    <p>Welcome to the <strong>Enterprise Simulation Environment</strong>. Amateurs focus on destructive filters; professionals engineer physics, light behavior, and strict modular nodes.</p>
+                    <div class="glass-card">
+                        <h3>System Objectives</h3>
+                        <ul>
+                            <li><strong>Non-Destructive Matrix:</strong> Zero pixel destruction. All logic is applied via mathematically calculated layer masks.</li>
+                            <li><strong>Physical Simulation:</strong> Bridge the gap between digital layers and physical photon behavior.</li>
+                            <li><strong>Asset Integrity:</strong> Force encapsulation of raw pixels into Smart Objects.</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <section class="module" id="module-1">
+                    <h2>3D Node Compositing Engine</h2>
+                    <p>Observe the physical simulation. Move your mouse across the rendering window to visualize Z-depth parallax and dynamic specular lighting. Activate nodes sequentially.</p>
+                    
+                    <div class="engine-container" id="engine-wrap">
+                        <div class="scene-3d" id="scene-3d">
+                            <div class="engine-layer" id="node-env"><div class="grid-floor"></div></div>
+                            <div class="engine-layer" id="node-shadow"><div class="shadow-blob"></div></div>
+                            <div class="engine-layer" id="node-subject"><div class="subject-cube"></div></div>
+                            <div class="engine-layer" id="node-light"><div class="rim-light-sim"></div></div>
+                            <div class="engine-layer" id="node-atmos"><div class="fog-sim"></div></div>
+                        </div>
+
+                        <div class="engine-controls" role="group" aria-label="3D Engine Node Controls">
+                            <button class="node-btn" data-target="node-env">1. Environment</button>
+                            <button class="node-btn" data-target="node-shadow">2. Occlusion</button>
+                            <button class="node-btn" data-target="node-subject">3. Subject Plate</button>
+                            <button class="node-btn" data-target="node-light">4. Rim Light</button>
+                            <button class="node-btn" data-target="node-atmos">5. Z-Depth Fog</button>
+                            <button class="node-btn btn-reset" id="btn-reset-nodes" aria-label="Purge Engine Cache">Purge Cache</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="module" id="module-2">
+                    <h2>Gravitational Grounding</h2>
+                    <p>A subject without structurally accurate shadows is mathematically invalid. Grounding requires computation of two distinct physics arrays.</p>
+                    <div class="glass-card">
+                        <h3>Core Mechanics</h3>
+                        <ul>
+                            <li><strong>Ambient Occlusion (Contact):</strong> Micro-shadows where objects physically touch, denying light bounce.</li>
+                            <li><strong>Directional Raytracing:</strong> Multiply-blended matrices simulating light scatter over atmospheric distance.</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <section class="module" id="module-3">
+                    <h2>Global Varnish & Output</h2>
+                    <p>The final compilation seals the composite, forcing the human optical system to register disparate assets as a single photographic event.</p>
+                    <p>Inject unified film grain to match structural noise profiles, map shadow luminance to cool hues, and map highlight peaks to warm bands using a master lookup table (LUT).</p>
+                </section>
+            </div>
+
+            <!-- Footer Command Palette -->
+            <footer id="footer">
+                <div class="keyboard-shortcuts">
+                    <span><span class="key">←</span> <span class="key">→</span> Navigate</span>
+                    <span><span class="key">T</span> Theme</span>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button class="cmd-btn" id="btn-prev">Back</button>
+                    <button class="cmd-btn cmd-primary" id="btn-next">Continue</button>
+                </div>
+            </footer>
+        </main>
+    </div>
+
+    <!-- ARIA-Live Region for Screen Readers & Visual Toasts -->
+    <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- =========================================
+         7. ENTERPRISE JAVASCRIPT ARCHITECTURE
+         ========================================= -->
+    <script>
+        /**
+         * @fileoverview Enterprise Pro Compositor Application
+         * @author 15-Year Senior Architect
+         * @description Implements high-performance 3D hardware-accelerated rendering (rAF),
+         * reactive state management via ES6 Proxies, safe local storage, and strict a11y.
+         */
+        
+        (() => {
+            'use strict';
+
+            /**
+             * Safe LocalStorage Wrapper
+             */
+            const Storage = {
+                get(key, fallback) {
+                    try { return localStorage.getItem(key) || fallback; } 
+                    catch (e) { return fallback; }
+                },
+                set(key, value) {
+                    try { localStorage.setItem(key, value); } 
+                    catch (e) { console.warn('Storage quota/security restricted.'); }
+                }
+            };
+
+            /**
+             * Notification Engine (A11y Compliant)
+             */
+            class NotificationEngine {
+                #container = document.getElementById('toast-container');
+                
+                trigger(message, duration = 3000) {
+                    const toast = document.createElement('div');
+                    toast.className = 'toast';
+                    toast.innerHTML = `<span style="color: var(--accent);">System:</span> ${message}`;
+                    this.#container.appendChild(toast);
+
+                    // Clean up DOM and animations safely
+                    const removeTimer = setTimeout(() => {
+                        toast.style.animation = 'none';
+                        toast.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s ease';
+                        
+                        // Trigger reflow
+                        void toast.offsetWidth; 
+                        
+                        toast.style.transform = 'translateX(120%)';
+                        toast.style.opacity = '0';
+                        
+                        setTimeout(() => toast.remove(), 400);
+                    }, duration);
+                }
+            }
+
+            /**
+             * High-Performance Parallax Engine using requestAnimationFrame
+             */
+            class ParallaxEngine {
+                #wrap = document.getElementById('engine-wrap');
+                #scene = document.getElementById('scene-3d');
+                #ticking = false;
+                #targetX = 0;
+                #targetY = 0;
+                #currentX = 0;
+                #currentY = 0;
+
+                constructor() {
+                    if(!this.#wrap || !this.#scene) return;
+                    this.bindEvents();
+                    this.renderLoop(); // Start hardware-accelerated loop
+                }
+
+                bindEvents() {
+                    this.#wrap.addEventListener('mousemove', (e) => {
+                        const rect = this.#wrap.getBoundingClientRect();
+                        
+                        // Map CSS variables for dynamic specular lighting on nodes
+                        const pctX = ((e.clientX - rect.left) / rect.width) * 100;
+                        const pctY = ((e.clientY - rect.top) / rect.height) * 100;
+                        this.#wrap.style.setProperty('--mouse-x', `${pctX}%`);
+                        this.#wrap.style.setProperty('--mouse-y', `${pctY}%`);
+
+                        // Calculate target rotation (-15 to 15 degrees)
+                        const x = e.clientX - rect.left - rect.width / 2;
+                        const y = e.clientY - rect.top - rect.height / 2;
+                        
+                        this.#targetX = -(y / rect.height) * 15;
+                        this.#targetY = (x / rect.width) * 15;
+                    }, { passive: true }); // Passive listener for scrolling performance
+
+                    this.#wrap.addEventListener('mouseleave', () => {
+                        this.#targetX = 0;
+                        this.#targetY = 0;
+                        this.#wrap.style.setProperty('--mouse-x', `50%`);
+                        this.#wrap.style.setProperty('--mouse-y', `50%`);
+                    });
+                }
+
+                // Smoothly interpolate rotation using rAF (lerping)
+                renderLoop() {
+                    // Linear Interpolation for buttery smooth settling
+                    this.#currentX += (this.#targetX - this.#currentX) * 0.1;
+                    this.#currentY += (this.#targetY - this.#currentY) * 0.1;
+
+                    // Apply transform via hardware acceleration
+                    this.#scene.style.transform = `rotateX(${this.#currentX.toFixed(2)}deg) rotateY(${this.#currentY.toFixed(2)}deg)`;
+                    
+                    requestAnimationFrame(() => this.renderLoop());
+                }
+            }
+
+            /**
+             * Application Controller & Reactive State
+             */
+            class ProCompositorApp {
+                #modules = [
+                    "Structural Architecture", 
+                    "3D Node Engine", 
+                    "Gravitational Grounding", 
+                    "Global Varnish"
+                ];
+                #state;
+                #dom;
+                #notifier;
+
+                constructor() {
+                    this.#notifier = new NotificationEngine();
+                    
+                    // Cache DOM nodes once
+                    this.#dom = {
+                        navList: document.getElementById('nav-list'),
+                        modules: document.querySelectorAll('.module'),
+                        progBar: document.getElementById('progress-bar'),
+                        btnPrev: document.getElementById('btn-prev'),
+                        btnNext: document.getElementById('btn-next'),
+                        btnTheme: document.getElementById('btn-theme'),
+                        viewport: document.getElementById('content-viewport'),
+                        nodeBtns: document.querySelectorAll('.node-btn:not(.btn-reset)'),
+                        btnResetNodes: document.getElementById('btn-reset-nodes')
+                    };
+
+                    // State Proxy to auto-trigger render on mutation
+                    this.#state = new Proxy({
+                        currentStep: 0,
+                        theme: Storage.get('pro-theme', 'dark'),
+                        totalSteps: this.#modules.length
+                    }, {
+                        set: (target, key, value) => {
+                            if(target[key] === value) return true; // Prevent unnecessary renders
+                            target[key] = value;
+                            this.render();
+                            return true;
+                        }
+                    });
+
+                    this.init();
+                }
+
+                init() {
+                    this.buildSidebar();
+                    this.bindGlobalEvents();
+                    new ParallaxEngine();
+                    
+                    // Initialize UI visually without triggering reactivity loop
+                    this.applyTheme(this.#state.theme);
+                    this.render();
+                    
+                    // Initial load feedback
+                    setTimeout(() => this.#notifier.trigger('Engine Initialized & Ready.', 2500), 400);
+                }
+
+                buildSidebar() {
+                    this.#modules.forEach((title, idx) => {
+                        const li = document.createElement('li');
+                        // Use semantic button for a11y focus inside list item
+                        li.innerHTML = `<button class="nav-item" aria-label="Navigate to ${title}">
+                                            <div class="nav-indicator"></div> ${title}
+                                        </button>`;
+                        li.querySelector('button').addEventListener('click', () => this.navigate(idx));
+                        this.#dom.navList.appendChild(li);
+                    });
+                }
+
+                bindGlobalEvents() {
+                    // Routing
+                    this.#dom.btnNext.addEventListener('click', () => this.navigate(this.#state.currentStep + 1));
+                    this.#dom.btnPrev.addEventListener('click', () => this.navigate(this.#state.currentStep - 1));
+                    
+                    // Keyboard A11y Controller
+                    document.addEventListener('keydown', (e) => {
+                        // Avoid triggering shortcuts if typing in an input (though none exist currently)
+                        if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+                        
+                        if (e.key === 'ArrowRight') this.navigate(this.#state.currentStep + 1);
+                        if (e.key === 'ArrowLeft') this.navigate(this.#state.currentStep - 1);
+                        if (e.key.toLowerCase() === 't') this.toggleTheme();
+                    });
+
+                    // Theme
+                    this.#dom.btnTheme.addEventListener('click', () => this.toggleTheme());
+
+                    // Node Engine Toggles
+                    this.#dom.nodeBtns.forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            const targetId = e.target.dataset.target;
+                            const layer = document.getElementById(targetId);
+                            const isActive = e.target.classList.toggle('active');
+                            
+                            if (isActive) {
+                                layer.classList.add('active');
+                                this.#notifier.trigger(`Node activated: ${e.target.innerText.split('.')[1].trim()}`, 2000);
+                            } else {
+                                layer.classList.remove('active');
+                            }
+                        });
+                    });
+
+                    // Purge Cache Button
+                    if(this.#dom.btnResetNodes) {
+                        this.#dom.btnResetNodes.addEventListener('click', () => {
+                            this.#dom.nodeBtns.forEach(b => b.classList.remove('active'));
+                            document.querySelectorAll('.engine-layer').forEach(l => l.classList.remove('active'));
+                            this.#notifier.trigger('Simulation cache safely purged.', 3000);
+                        });
+                    }
+                }
+
+                navigate(index) {
+                    if (index >= 0 && index < this.#state.totalSteps) {
+                        this.#state.currentStep = index;
+                        // Focus viewport for screen reader context shift
+                        this.#dom.viewport.focus({ preventScroll: true });
+                        this.#dom.viewport.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                }
+
+                toggleTheme() {
+                    const newTheme = this.#state.theme === 'dark' ? 'light' : 'dark';
+                    this.#state.theme = newTheme;
+                    Storage.set('pro-theme', newTheme);
+                    this.applyTheme(newTheme);
+                    this.#notifier.trigger(`UI inverted to ${newTheme.toUpperCase()} mode.`, 2000);
+                }
+
+                applyTheme(mode) {
+                    if (mode === 'light') {
+                        document.documentElement.setAttribute('data-theme', 'light');
+                    } else {
+                        document.documentElement.removeAttribute('data-theme');
+                    }
+                }
+
+                render() {
+                    const { currentStep, totalSteps } = this.#state;
+
+                    // 1. Sidebar State Sync
+                    const navButtons = this.#dom.navList.querySelectorAll('.nav-item');
+                    navButtons.forEach((btn, idx) => {
+                        btn.classList.remove('active', 'completed');
+                        if (idx === currentStep) btn.classList.add('active');
+                        else if (idx < currentStep) btn.classList.add('completed');
+                    });
+
+                    // 2. Module Visibility (DOM Reflow for animations)
+                    this.#dom.modules.forEach((mod, idx) => {
+                        if (idx === currentStep) {
+                            mod.classList.add('active');
+                            mod.setAttribute('aria-hidden', 'false');
+                            void mod.offsetWidth; // Force Reflow to guarantee animation triggers
+                        } else {
+                            mod.classList.remove('active');
+                            mod.setAttribute('aria-hidden', 'true');
+                        }
+                    });
+
+                    // 3. Progress Bar & ARIA Sync
+                    const progressPct = (currentStep / (totalSteps - 1)) * 100;
+                    this.#dom.progBar.style.width = `${progressPct}%`;
+                    this.#dom.progBar.setAttribute('aria-valuenow', progressPct);
+
+                    // 4. Footer Button Logic
+                    this.#dom.btnPrev.disabled = currentStep === 0;
+                    if (currentStep === totalSteps - 1) {
+                        this.#dom.btnNext.disabled = true;
+                        this.#dom.btnNext.textContent = 'Compilation Complete';
+                    } else {
+                        this.#dom.btnNext.disabled = false;
+                        this.#dom.btnNext.textContent = 'Continue Pipeline';
+                    }
+                }
+            }
+
+            // Bootstrap Application
+            document.addEventListener('DOMContentLoaded', () => {
+                window.EnterpriseApp = new ProCompositorApp();
+            });
+
+        })();
+    </script>
+</body>
+</html>
